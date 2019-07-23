@@ -9,13 +9,26 @@ exiopath <- "/home/bruckner/wu_share/WU/Projekte/GRU/04_Daten/MRIO/IO data/EXIOB
 library(Matrix)
 
 countries <- readODS::read_ods("./input/fabio-exiobase.ods", sheet = 3)
-# countries_exio <- read.csv2("./input/Regions_FAO-EXIO.csv", stringsAsFactors = FALSE)
+countries_exio <- read.csv2("./input/Regions_FAO-EXIO.csv", stringsAsFactors = FALSE)
+countries_exio <- unique(countries_exio[,-(1:2)])
+countries_exio$EXIOcode <- as.integer(countries_exio$EXIOcode)
+countries_exio <- countries_exio[is.finite(countries_exio$EXIOcode),]
+countries_exio <- countries_exio[order(countries_exio$EXIOcode),]
 items <- read.csv2("./input/Items.csv", stringsAsFactors = FALSE)
+items_exio <- read.csv2("./input/items_exio.csv", stringsAsFactors = FALSE)
 index <- rbind(data.frame(country = rep(countries$ISO, each=130),
                           item = rep(items$Item, 192),
                           model = "fabio"),
                data.frame(country = as.character(rep(1:49, each=200)),
                           item = as.character(rep(1:200, 49)),
+                          model = "exio"))
+index <- rbind(data.frame(country = rep(countries$Country, each=130),
+                          ISO = rep(countries$ISO, each=130),
+                          item = rep(items$Item, 192),
+                          model = "fabio"),
+               data.frame(country = rep(countries_exio$EXIOregion, each=200),
+                          ISO = rep(countries_exio$EXIO2digit, each=200),
+                          item = rep(items_exio$Item, 49),
                           model = "exio"))
 
 agg <- function(x)
@@ -23,12 +36,12 @@ agg <- function(x)
   x <- as.matrix(x) %*% sapply(unique(colnames(x)),"==",colnames(x))
   return(x)
 }
-get_L2 <- function(fname, aL0, aL1, A, L1, cutoff){
-  if(A[aL1,aL0] < cutoff) return(0)
-  temp <- (extension * A)[,aL1] * A[aL1,aL0] * Y[aL0,country]
-  temp <- data.frame(country = unique(class.col$Country)[country], L0 = aL0, L1 = aL1, L2 = 1:length(temp), L3 = 0, value = temp)
-  try(fwrite(temp[abs(temp$value) > cutoff, ], file = fname, row.names = FALSE, col.names = FALSE, append = TRUE))
-}
+# get_L2 <- function(fname, aL0, aL1, A, L1, cutoff){
+#   if(A[aL1,aL0] < cutoff) return(0)
+#   temp <- (extension * A)[,aL1] * A[aL1,aL0] * Y[aL0,country]
+#   temp <- data.frame(country = unique(class.col$Country)[country], L0 = aL0, L1 = aL1, L2 = 1:length(temp), L3 = 0, value = temp)
+#   try(fwrite(temp[abs(temp$value) > cutoff, ], file = fname, row.names = FALSE, col.names = FALSE, append = TRUE))
+# }
 
 
 # --- Non-recursive approach, functions ---
@@ -179,8 +192,21 @@ cutoff <- 0.001
 #----------------------------------------
 
 
-p <- which(index$country==country & index$item==product)
+p <- which(index$ISO==country & index$item==product)
 
 results <- spa5(p,x,D,cutoff)
 
 data.table::fwrite(results, paste0("./output/results_spa_",year,"_",country,"_",product,".csv"))
+
+
+index <- rbind(index,
+               data.frame(country = countries$Country[countries$ISO == colnames(Y_fabio)[1:192]],
+                          ISO = colnames(Y_fabio)[1:192],
+                          item = "",
+                          model = "fabio"),
+               data.frame(country = countries_exio$EXIOregion[45:49],
+                          ISO = countries_exio$EXIO2digit[45:49],
+                          item = "",
+                          model = "exio"))
+
+write.csv(index,"./input/index.csv")
