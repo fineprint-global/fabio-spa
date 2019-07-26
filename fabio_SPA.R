@@ -181,14 +181,19 @@ rm(B); gc()
 # choose product and country
 #----------------------------------------
 country <- "BRA"
-country <- "IDN"
 product <- "Cattle"
 product <- "Soyabeans"
-product <- "Oil, palm fruit"
+cutoff <- 0.001
+#----------------------------------------
+country <- "IDN"
 product <- "Wood fuel"
 product <- "Industrial roundwood, coniferous"
 product <- "Industrial roundwood, non-coniferous"
 cutoff <- 0.001
+#----------------------------------------
+country <- "IDN"
+product <- "Oil, palm fruit"
+cutoff <- 0.0001
 #----------------------------------------
 
 
