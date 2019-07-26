@@ -109,25 +109,25 @@ spa5 <- function(p,x,D,cutoff){
   # Level 2
   L2 <- data.frame()
   for(i in 1:nrow(L1)){
-    print(paste(i,"/",nrow(L1)))
+    print(paste("L2:",i,"/",nrow(L1)))
     L2 <- rbind(L2, spa(L1[i,],D,cutoff*L0$value,level=2))
   }
   # Level 3
   L3 <- data.frame()
   for(i in 1:nrow(L2)){
-    print(paste(i,"/",nrow(L2)))
+    print(paste("L3:",i,"/",nrow(L2)))
     L3 <- rbind(L3, spa(L2[i,],D,cutoff*L0$value,level=3))
   }
   # Level 4
   L4 <- data.frame()
   for(i in 1:nrow(L3)){
-    print(paste(i,"/",nrow(L3)))
+    print(paste("L4:",i,"/",nrow(L3)))
     L4 <- rbind(L4, spa(L3[i,],D,cutoff*L0$value,level=4))
   }
   # Level 5
   L5 <- data.frame()
   for(i in 1:nrow(L4)){
-    print(paste(i,"/",nrow(L4)))
+    print(paste("L5:",i,"/",nrow(L4)))
     L5 <- rbind(L5, spa(L4[i,],D,cutoff*L0$value,level=5))
   }
   return(rbind(L0,L1,L2,L3,L4,L5))
@@ -183,7 +183,7 @@ rm(B); gc()
 country <- "BRA"
 product <- "Cattle"
 product <- "Soyabeans"
-cutoff <- 0.001
+cutoff <- 0.0001
 #----------------------------------------
 country <- "IDN"
 product <- "Wood fuel"

@@ -1,31 +1,29 @@
 library(tidyverse)
 # library(RColorBrewer)
 
-setwd("sankey")
-
 # control panel ----------------------------------------------------------------
 
 # set the precision used to cut off flows to either [rest] or RoW 
 # depending on if the flow goes to final demand (then RoW) or not ([rest])
-precision <- 0.5*1e-2 # 0,5% precision
+precision <- 0.5*1e-2 # 0.5% precision
 
-country <- c("BRA", "IDN")[2]
-item <- c("Cattle", "Soyabeans", "Oil, palm fruit", "Wood")[4]
+country <- c("BRA", "IDN")[1]
+item <- c("Cattle", "Soyabeans", "Oil, palm fruit", "Wood")[2]
 
 # get data  --------------------------------------------------------------------
 if(item == "Wood"){
-  data_1 <- read.csv(paste0("../output/results_spa_2013_", country, "_Industrial roundwood, coniferous.csv"))
-  data_2 <- read.csv(paste0("../output/results_spa_2013_", country, "_Industrial roundwood, non-coniferous.csv"))
-  data_3 <- read.csv(paste0("../output/results_spa_2013_", country, "_Wood fuel.csv"))
+  data_1 <- read.csv(paste0("./output/results_spa_2013_", country, "_Industrial roundwood, coniferous.csv"))
+  data_2 <- read.csv(paste0("./output/results_spa_2013_", country, "_Industrial roundwood, non-coniferous.csv"))
+  data_3 <- read.csv(paste0("./output/results_spa_2013_", country, "_Wood fuel.csv"))
   
   data <- rbind(data_1, data_2, data_3)
 } else {
-  data <- read.csv(paste0("../output/results_spa_2013_", country, "_", item ,".csv"))
+  data <- read.csv(paste0("./output/results_spa_2013_", country, "_", item ,".csv"))
 }
 
 # get the index to know the meaning of the codes in data
 # the relevant column is called "X"
-index <- read.csv("../input/index.csv")
+index <- read.csv("./input/index.csv")
 
 # prepare data  ----------------------------------------------------------------
 
@@ -286,16 +284,14 @@ p <- plotly::plot_ly(
     size = 12,
     color = "black"
   ),
-  
   node = node_list,
-  
   link = link_list
-) %>%
+  ) %>%
   plotly::layout(
-    title = sprintf("FABIO SPA for %s (%s) - land footprint %.2e ha",
-                    item,
-                    country,
-                    total_sum),
+    # title = sprintf("FABIO SPA for %s (%s) - land footprint %.2e ha",
+    #                 item,
+    #                 country,
+    #                 total_sum),
     # paper_bgcolor = "green",
     xaxis = list(showgrid = F, zeroline = F, showticklabels = F),
     yaxis = list(showgrid = F, zeroline = F, showticklabels = F)
