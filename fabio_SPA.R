@@ -182,27 +182,35 @@ rm(B); gc()
 #----------------------------------------
 country <- "BRA"
 product <- "Cattle"
-product <- "Soyabeans"
-cutoff <- 0.0001
+#----------------------------------------
+country <- "BRA"
+roduct <- "Soyabeans"
 #----------------------------------------
 country <- "IDN"
 product <- "Wood fuel"
 product <- "Industrial roundwood, coniferous"
 product <- "Industrial roundwood, non-coniferous"
-cutoff <- 0.001
 #----------------------------------------
 country <- "IDN"
 product <- "Oil, palm fruit"
-cutoff <- 0.0001
 #----------------------------------------
 
-
+cutoff <- 0.00001
 p <- which(index$ISO==country & index$item==product)
 
 results <- spa5(p,x,D,cutoff)
 
+results$fd <- results$rest <- results$value
+results$fd[apply(results[,1:6], 1, max, na.rm = T) < nrow(D)] <- 0
+results$rest[apply(results[,1:6], 1, min, na.rm = T) > 0] <- 0
 data.table::fwrite(results, paste0("./output/results_spa_",year,"_",country,"_",product,".csv"))
 
+
+sum(results$rest)
+sum(results$fd)
+
+
+# Prepare index for sankeys ----------------------------------------
 
 index <- rbind(index,
                data.frame(country = countries$Country[countries$ISO == colnames(Y_fabio)[1:192]],

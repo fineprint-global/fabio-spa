@@ -5,20 +5,20 @@ library(tidyverse)
 
 # set the precision used to cut off flows to either [rest] or RoW 
 # depending on if the flow goes to final demand (then RoW) or not ([rest])
-precision <- 0.5*1e-2 # 0.5% precision
+precision <- 10*1e-2 # 0.5% precision
 
-country <- c("BRA", "IDN")[1]
-item <- c("Cattle", "Soyabeans", "Oil, palm fruit", "Wood")[2]
+country <- c("BRA", "IDN")[2]
+product <- c("Cattle", "Soyabeans", "Oil, palm fruit", "Wood")[4]
 
 # get data  --------------------------------------------------------------------
-if(item == "Wood"){
+if(product == "Wood"){
   data_1 <- read.csv(paste0("./output/results_spa_2013_", country, "_Industrial roundwood, coniferous.csv"))
   data_2 <- read.csv(paste0("./output/results_spa_2013_", country, "_Industrial roundwood, non-coniferous.csv"))
   data_3 <- read.csv(paste0("./output/results_spa_2013_", country, "_Wood fuel.csv"))
   
   data <- rbind(data_1, data_2, data_3)
 } else {
-  data <- read.csv(paste0("./output/results_spa_2013_", country, "_", item ,".csv"))
+  data <- read.csv(paste0("./output/results_spa_2013_", country, "_", product ,".csv"))
 }
 
 # get the index to know the meaning of the codes in data
@@ -28,7 +28,7 @@ index <- read.csv("./input/index.csv")
 # prepare data  ----------------------------------------------------------------
 
 # merge all Wood for Indonesia to one single starting point
-if(item == "Wood"){
+if(product == "Wood"){
   L0 <- min(unique(data$L0))
   
   levels(index$item) <- c(levels(index$item), "Wood")
@@ -288,10 +288,10 @@ p <- plotly::plot_ly(
   link = link_list
   ) %>%
   plotly::layout(
-    # title = sprintf("FABIO SPA for %s (%s) - land footprint %.2e ha",
-    #                 item,
-    #                 country,
-    #                 total_sum),
+    title = sprintf("FABIO SPA for %s (%s) - land footprint %.2e ha",
+                    product,
+                    country,
+                    total_sum),
     # paper_bgcolor = "green",
     xaxis = list(showgrid = F, zeroline = F, showticklabels = F),
     yaxis = list(showgrid = F, zeroline = F, showticklabels = F)
