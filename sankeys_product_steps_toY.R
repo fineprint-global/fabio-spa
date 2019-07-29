@@ -9,7 +9,7 @@ precision <- 0.5*1e-2 # 0.5% precision
 rest_name <- "[rest]"
 
 country <- c("BRA", "IDN")[2]
-product <- c("Cattle", "Soyabeans", "Oil, palm fruit", "Wood")[4]
+product <- c("Cattle", "Soyabeans", "Oil, palm fruit", "Wood")[3]
 
 # get data  --------------------------------------------------------------------
 if(product == "Wood"){
@@ -258,8 +258,8 @@ all_nodes <- all_nodes %>%
 node_list <- list(
   label = sprintf("%s (%.0f%%)", 
                   # shorten name if it's longer than 30 chars
-                  ifelse(nchar(all_nodes$name) > 30,
-                         paste0(substr(all_nodes$name, 1, 27), "..."),
+                  ifelse(nchar(all_nodes$name) > 23,
+                         paste0(substr(all_nodes$name, 1, 20), "..."),
                          all_nodes$name),
                   all_nodes$percent),
   color = all_nodes$color,
