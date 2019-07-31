@@ -8,8 +8,8 @@ library(tidyverse)
 precision <- 0.5*1e-2 # 0.5% precision
 rest_name <- "[rest]"
 
-country <- c("BRA", "IDN")[2]
-product <- c("Cattle", "Soyabeans", "Oil, palm fruit", "Wood")[3]
+country <- c("BRA", "IDN")[1]
+product <- c("Cattle", "Soyabeans", "Oil, palm fruit", "Wood")[2]
 
 # get data  --------------------------------------------------------------------
 if(product == "Wood"){
@@ -219,7 +219,7 @@ links <- data %>%
   dplyr::filter(!is.na(value) & value > 0) %>% 
   dplyr::left_join(all_nodes[,c("code", "index")], by = c("code_src_unique" = "code")) %>% 
   dplyr::rename(source_index = index) %>% 
-  dplyr::mutate(color = if_else(model == "fabio", "rgba(38, 166, 91, .3)", "rgba(149, 165, 166, .3)")) %>% 
+  dplyr::mutate(color = if_else(model == "fabio", "rgba(34, 156, 91, .4)", "rgba(160, 160, 160, .4)")) %>% #"rgba(38, 166, 91, .3)", "rgba(149, 165, 166, .3)")) %>% 
   dplyr::left_join(all_nodes[,c("code", "index")], by = c("code_tgt_unique" = "code")) %>% 
   dplyr::rename(target_index = index) %>% 
   dplyr::group_by(source_index, target_index, color) %>% 
@@ -271,6 +271,8 @@ node_list <- list(
   )
 )
 
+# node_list$label <- paste0("<b>",node_list$label,"</b>")
+
 p <- plotly::plot_ly(
   type = "sankey",
   orientation = "h", # alternative: v
@@ -288,10 +290,10 @@ p <- plotly::plot_ly(
   link = link_list
   ) %>%
   plotly::layout(
-    title = sprintf("FABIO SPA for %s (%s) - land footprint %.2e ha",
-                    product,
-                    country,
-                    total_sum),
+    # title = sprintf("FABIO SPA for %s (%s) - land footprint %.2e ha",
+    #                 product,
+    #                 country,
+    #                 total_sum),
     # paper_bgcolor = "green",
     xaxis = list(showgrid = F, zeroline = F, showticklabels = F),
     yaxis = list(showgrid = F, zeroline = F, showticklabels = F)

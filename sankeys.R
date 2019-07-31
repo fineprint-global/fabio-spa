@@ -5,10 +5,10 @@ library(tidyverse)
 
 # set the precision used to cut off flows to either [rest] or RoW 
 # depending on if the flow goes to final demand (then RoW) or not ([rest])
-precision <- 10*1e-2 # 0.5% precision
+precision <- 0.5*1e-2 # 0.5% precision
 
-country <- c("BRA", "IDN")[2]
-product <- c("Cattle", "Soyabeans", "Oil, palm fruit", "Wood")[4]
+country <- c("BRA", "IDN")[1]
+product <- c("Cattle", "Soyabeans", "Oil, palm fruit", "Wood")[1]
 
 # get data  --------------------------------------------------------------------
 if(product == "Wood"){
