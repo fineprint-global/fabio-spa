@@ -1,31 +1,91 @@
 library(tidyverse)
 # library(RColorBrewer)
 
-# control panel ----------------------------------------------------------------
+# define country-product combinations ----------------------------------------
 
+product_list <- data.frame(country = character(), product = character(), stringsAsFactors = F)
+product_list[1,] <- c("BRA", "Cattle")
+product_list[2,] <- c("BRA", "Soyabeans")
+product_list[3,] <- c("IDN", "Oil, palm fruit")
+product_list[4,] <- c("IDN", "Wood fuel")
+product_list[5,] <- c("IDN", "Industrial roundwood, coniferous")
+product_list[6,] <- c("IDN", "Industrial roundwood, non-coniferous")
+product_list[7,] <- c("IND", "Seed cotton")
+product_list[8,] <- c("CHN", "Seed cotton")
+product_list[9,] <- c("USA", "Seed cotton")
+product_list[10,] <- c("PAK", "Seed cotton")
+product_list[11,] <- c("BRA", "Seed cotton")
+product_list[12,] <- c("UZB", "Seed cotton")
+product_list[13,] <- c("ALL", "Seed cotton")
+
+
+######################################################
+# select product and country (and define cutoff)
+#----------------------------------------
+select <- 13
 # set the precision used to cut off flows to either [rest] or RoW 
 # depending on if the flow goes to final demand (then RoW) or not ([rest])
-precision <- 0.5*1e-2 # 0.5% precision
-rest_name <- "[rest]"
+precision <- 1*1e-2 # 0.5% precision
+allocation <- c("mass","price")[2]
+######################################################
 
-country <- c("BRA", "IDN")[1]
-product <- c("Cattle", "Soyabeans", "Oil, palm fruit", "Wood")[2]
+product <- product_list$product[select]
+country <- product_list$country[select]
+rest_name <- "[rest]"
 
 # get data  --------------------------------------------------------------------
 if(product == "Wood"){
   data_1 <- read.csv(paste0("./output/results_spa_2013_", country, "_Industrial roundwood, coniferous.csv"))
   data_2 <- read.csv(paste0("./output/results_spa_2013_", country, "_Industrial roundwood, non-coniferous.csv"))
   data_3 <- read.csv(paste0("./output/results_spa_2013_", country, "_Wood fuel.csv"))
-  
   data <- rbind(data_1, data_2, data_3)
   rm(data_1, data_2, data_3)
+} else if(product == "Seed cotton" & country == "ALL"){
+  data_1 <- read.csv(paste0("./output/results_spa_2013_IND_", product, "_", allocation, ".csv"))
+  data_2 <- read.csv(paste0("./output/results_spa_2013_CHN_", product, "_", allocation, ".csv"))
+  data_3 <- read.csv(paste0("./output/results_spa_2013_USA_", product, "_", allocation, ".csv"))
+  data_4 <- read.csv(paste0("./output/results_spa_2013_PAK_", product, "_", allocation, ".csv"))
+  data_5 <- read.csv(paste0("./output/results_spa_2013_BRA_", product, "_", allocation, ".csv"))
+  data_6 <- read.csv(paste0("./output/results_spa_2013_UZB_", product, "_", allocation, ".csv"))
+  data <- rbind(data_1, data_2, data_3, data_4, data_5, data_6)
+  rm(data_1, data_2, data_3, data_4, data_5, data_6)
+} else if (product == "Seed cotton" & country != "ALL"){
+  data <- read.csv(paste0("./output/results_spa_2013_", country, "_", product, "_", allocation, ".csv"))
 } else {
   data <- read.csv(paste0("./output/results_spa_2013_", country, "_", product ,".csv"))
-}
+} 
+sum(data$rest) / (sum(data$fd) + sum(data$rest))
 
-# get the index to know the meaning of the codes in data
-# the relevant column is called "X"
-index <- read.csv("./input/index.csv")
+
+# Prepare index ----------------------------------------
+
+# gives the meaning of the codes used in data
+countries <- readODS::read_ods("./input/fabio-exiobase.ods", sheet = 3)
+countries_exio <- read.csv2("./input/Regions_FAO-EXIO.csv", stringsAsFactors = FALSE)
+countries_exio <- unique(countries_exio[,-(1:2)])
+countries_exio$EXIOcode <- as.integer(countries_exio$EXIOcode)
+countries_exio <- countries_exio[is.finite(countries_exio$EXIOcode),]
+countries_exio <- countries_exio[order(countries_exio$EXIOcode),]
+items <- read.csv2("./input/Items.csv", stringsAsFactors = FALSE)
+items_exio <- read.csv2("./input/items_exio.csv", stringsAsFactors = FALSE)
+index <- rbind(data.frame(country = rep(countries$Country, each=130),
+                          ISO = rep(countries$ISO, each=130),
+                          item = rep(items$Item, 192),
+                          model = "fabio"),
+               data.frame(country = rep(countries_exio$EXIOregion, each=200),
+                          ISO = rep(countries_exio$EXIO2digit, each=200),
+                          item = rep(items_exio$Item, 49),
+                          model = "exio"),
+               data.frame(country = countries$Country,
+                          ISO = countries$ISO,
+                          item = "",
+                          model = "fabio"),
+               data.frame(country = countries_exio$EXIOregion[45:49],
+                          ISO = countries_exio$EXIO2digit[45:49],
+                          item = "",
+                          model = "exio"))
+index$X <- 1:nrow(index)
+
 
 # prepare data  ----------------------------------------------------------------
 

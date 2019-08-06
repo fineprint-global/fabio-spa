@@ -1,10 +1,11 @@
 ##########################################################################
-##  Worldmaps
+##  Treemaps
 ##########################################################################
-# install.packages("wbstats")
+# require(devtools)
+# install_github("wilkox/treemapify")
+# install.packages("treemapify")
 library(ggplot2)
-library(sf)
-library(rnaturalearth)
+library(treemapify)
 library(tidyverse)
 library(Matrix)
 
@@ -17,32 +18,9 @@ agg <- function(x)
   x <- as.matrix(x) %*% sapply(unique(colnames(x)),"==",colnames(x))
   return(x)
 }
-per_capita <- function(countries, data, year = as.integer(format(Sys.Date(), "%Y"))-1){
-  pop_data <- wbstats::wb(indicator = "SP.POP.TOTL", startdate = year, enddate = year)
-  if(is.null(countries)) {
-    data_pc <- data.frame(country = as.character(data$country), 
-                          value = as.numeric(data$value))
-  } else {
-    data_pc <- data.frame(country = as.character(countries), 
-                          value = as.numeric(data))
-  }
-  data_pc$pop <- pop_data$value[match(data_pc$country, pop_data$iso3c)]
-  data_pc$value <- data_pc$value / data_pc$pop
-  return(data_pc[,1:2])
-}
 #----------------------------------------
 # read data
 #----------------------------------------
-world <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf") %>% 
-  select(admin, adm0_a3_is, continent, region_un, subregion, region_wb, geometry) %>% 
-  group_by(admin, adm0_a3_is, continent, region_un, subregion, region_wb) %>% 
-  summarise()
-# theme_set(theme_bw())
-# world <- sf::st_as_sf(map('world', plot = FALSE, fill = TRUE))
-# world$footprint <- rnorm(nrow(world), 100, 60)
-# world <- map('world', projection = "gilbert")
-# world <- map('world', projection = "mollweide")
-
 items <- read.csv2("./input/Items.csv", stringsAsFactors = FALSE)
 items_exio <- read.csv2("./input/items_exio.csv", stringsAsFactors = FALSE)
 regions <- readODS::read_ods("./input/fabio-exiobase.ods", sheet = 3)
@@ -59,6 +37,7 @@ index_exio <- data.frame(country = rep(regions_exio$EXIOregion, each=200),
                          ISO = rep(regions_exio$EXIO2digit, each=200),
                          item = rep(items_exio$Item, 49),
                          model = "exio")
+index <- rbind(index_fabio, index_exio)
 
 ######################################################
 # select year and allocation
@@ -100,8 +79,6 @@ rm(L_fabio, L_link); gc()
 #----------------------------------------
 country <- c("BRA", "IDN")[1]
 product <- c("Cattle", "Soyabeans", "Oil, palm fruit", "Wood")[1]
-unit <- c("(kg per capita)", "(heads per capita)", "(cubic metres per capita)")[if_else(product=="Cattle", 2, if_else(product=="Wood", 3, 1))]
-percapita <- TRUE
 ######################################################
 
 #----------------------------------------
@@ -110,37 +87,38 @@ percapita <- TRUE
 if(product=="Wood") element <- colSums(L[index_fabio$ISO == country & index_fabio$item %in% items$Item[items$Com.Group=="Wood"], ]) / 1000
 if(product!="Wood") element <- L[index_fabio$ISO == country & index_fabio$item == product, ]
 
-data <- data.frame(region = colnames(Y),
-                   data = colSums(element * Y))
-if(percapita) {
-  data <- per_capita(data$region, data$data * 1000, year)
-  world$footprint <- data$value[match(world$adm0_a3_is, data$country)]
-  p <- ggplot(data = world) +
-    geom_sf(aes(fill = footprint), size = 0.05) +
-    labs(fill=paste0(country," ",product,"\n", unit)) + 
-    scale_fill_viridis_c(direction = -1, na.value = "lightgrey") + 
-    theme(rect = element_blank()) + 
-    coord_sf(crs = "+proj=robin")
-  # coord_sf(crs = "+proj=moll")
-  # coord_sf(crs = "+proj=wintri")
-} else {
-  # share of ROW which is lost (i.e. not plotted)
-  sum(data$data[192:197] / sum(data$data))
-  world$footprint <- data$data[match(world$adm0_a3_is, data$region)] / sum(data$data)
-  p <- ggplot(data = world) +
-    geom_sf(aes(fill = footprint), size = 0.05) +
-    labs(fill=paste0("Share of ",country," ",product)) + 
-    scale_fill_viridis_c(direction = -1, na.value = "lightgrey", labels = scales::percent) + 
-    theme(rect = element_blank()) + 
-    coord_sf(crs = "+proj=robin")
-  # coord_sf(crs = "+proj=moll")
-  # coord_sf(crs = "+proj=wintri")
-}
+data <- data.frame(region = index$ISO,
+                   product = index$item,
+                   data = rowSums(element * Y)) %>% 
+  select(-region) %>% 
+  group_by(product) %>% 
+  summarize(data = sum(data))
+data$group <- items$Group[match(data$product, items$Item)]
+data$group[is.na(data$group)] <- "Non-food"
+data$group[data$group %in% c("Livestock","Livestock products","Fish")] <- "Food, animal-based"
+data$group[data$group %in% c("Primary crops","Crop products")] <- "Food, plant-based"
+data$group[data$group=="Wood"] <- "Non-food"
+data %>% 
+  group_by(group) %>% 
+  summarize(data = sum(data))
+
+# treemap_coords <- treemapify::treemapify(data, area="data", label="product", group="group")
+# head(treemap_coords)
+# treemapify::ggplotify(treemap_coords)
+
+p <- ggplot(data, aes(area = data, fill = group, label = product, subgroup = group)) +
+  geom_treemap() +
+  geom_treemap_subgroup_border(color = "white") +
+  geom_treemap_subgroup_text(place = "centre", alpha = 0.5, colour = "black", fontface = "italic", min.size = 0) +
+  geom_treemap_text(reflow = T, place = "topleft", colour = "white") +
+  scale_fill_brewer(palette = "Set2") +
+  theme(legend.position = "none")
 
 # p
 
-ggsave(filename = paste0("map_",country,"_",product,"_",if_else(percapita,"percapita_",""),allocation,".png"), 
-       plot = p, device = "png", path = "./output", scale = 1, width = 207, height = 90, units = "mm", dpi = 300)
+ggsave(filename = paste0("treemap_",country,"_",product,"_",allocation,".png"), 
+       plot = p, device = "png", path = "./output", scale = 1, width = 200, height = 150, units = "mm", dpi = 300)
 
-# ggsave(filename = paste0("map_",country,"_",product,"_",if_else(percapita,"percapita_",""),allocation,".tif"), 
-#        plot = p, device = "tiff", path = "./output", scale = 1, width = 207, height = 90, units = "mm", dpi = 300)
+# ggsave(filename = paste0("treemap_",country,"_",product,"_",allocation,".tif"), 
+#        plot = p, device = "tiff", path = "./output", scale = 1, width = 200, height = 150, units = "mm", dpi = 300)
+

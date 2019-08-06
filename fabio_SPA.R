@@ -7,7 +7,9 @@ fabiopath <- "/mnt/nfs_fineprint/tmp/fabio/"
 exiopath <- "/home/bruckner/wu_share/WU/Projekte/GRU/04_Daten/MRIO/IO data/EXIOBASE/EXIOBASE 3.6/parsed/pxp/"
 
 library(Matrix)
+agg <- function(x) { x <- as.matrix(x) %*% sapply(unique(colnames(x)),"==",colnames(x)); return(x) }
 
+# Prepare index ----------------------------------------
 countries <- readODS::read_ods("./input/fabio-exiobase.ods", sheet = 3)
 countries_exio <- read.csv2("./input/Regions_FAO-EXIO.csv", stringsAsFactors = FALSE)
 countries_exio <- unique(countries_exio[,-(1:2)])
@@ -24,12 +26,6 @@ index <- rbind(data.frame(country = rep(countries$Country, each=130),
                           ISO = rep(countries_exio$EXIO2digit, each=200),
                           item = rep(items_exio$Item, 49),
                           model = "exio"))
-
-agg <- function(x)
-{
-  x <- as.matrix(x) %*% sapply(unique(colnames(x)),"==",colnames(x))
-  return(x)
-}
 
 
 # --- Non-recursive approach, functions ---
@@ -122,13 +118,19 @@ spa5 <- function(p,x,D,cutoff){
 }
 
 
+######################################################
+# select year and allocation
+#----------------------------------------
+year <- 2013
+allocation <- c("mass","price")[2]
+######################################################
+
 #----------------------------------------
 # load and prepare MRIO
 #----------------------------------------
-year <- 2013
 load(paste0(exiopath,year,"_Z.RData"))
 Z_exio <- Z
-Z_fabio <- readRDS(paste0(fabiopath,year,"_Z_mass.rds"))
+Z_fabio <- readRDS(paste0(fabiopath,year,"_Z_",allocation,".rds"))
 Z_fabio[Z_fabio<0] <- 0
 Z_link <- readRDS(paste0(fabiopath,"hybrid/",year,"_B.rds"))
 Z_link[Z_link<0] <- 0
@@ -165,49 +167,47 @@ D <- cbind(B,C)
 rm(B); gc()
 
 
-#----------------------------------------
-# choose product and country
-#----------------------------------------
-country <- "BRA"
-product <- "Cattle"
-#----------------------------------------
-country <- "BRA"
-roduct <- "Soyabeans"
-#----------------------------------------
-country <- "IDN"
-product <- "Wood fuel"
-product <- "Industrial roundwood, coniferous"
-product <- "Industrial roundwood, non-coniferous"
-#----------------------------------------
-country <- "IDN"
-product <- "Oil, palm fruit"
-#----------------------------------------
 
+# define country-product combinations ----------------------------------------
+
+product_list <- data.frame(country = character(), product = character(), stringsAsFactors = F)
+product_list[1,] <- c("BRA", "Cattle")
+product_list[2,] <- c("BRA", "Soyabeans")
+product_list[3,] <- c("IDN", "Oil, palm fruit")
+product_list[4,] <- c("IDN", "Wood fuel")
+product_list[5,] <- c("IDN", "Industrial roundwood, coniferous")
+product_list[6,] <- c("IDN", "Industrial roundwood, non-coniferous")
+product_list[7,] <- c("IND", "Seed cotton")
+product_list[8,] <- c("CHN", "Seed cotton")
+product_list[9,] <- c("USA", "Seed cotton")
+product_list[10,] <- c("PAK", "Seed cotton")
+product_list[11,] <- c("BRA", "Seed cotton")
+product_list[12,] <- c("UZB", "Seed cotton")
+
+
+######################################################
+# select product and country (and define cutoff)
+#----------------------------------------
+select <- 11
 cutoff <- 0.00001
-p <- which(index$ISO==country & index$item==product)
+######################################################
 
-results <- spa5(p,x,D,cutoff)
+for(i in 11:12){
+  select <- i
+  product <- product_list$product[select]
+  country <- product_list$country[select]
+  
+  p <- which(index$ISO==country & index$item==product)
+  
+  results <- spa5(p,x,D,cutoff)
+  
+  results$fd <- results$rest <- results$value
+  results$fd[apply(results[,1:6], 1, max, na.rm = T) < nrow(D)] <- 0
+  results$rest[apply(results[,1:6], 1, min, na.rm = T) > 0] <- 0
+  data.table::fwrite(results, paste0("./output/results_spa_",year,"_",country,"_",product,"_",allocation,".csv"))
+  
+  sum(results$rest) / (sum(results$fd) + sum(results$rest))
+}
 
-results$fd <- results$rest <- results$value
-results$fd[apply(results[,1:6], 1, max, na.rm = T) < nrow(D)] <- 0
-results$rest[apply(results[,1:6], 1, min, na.rm = T) > 0] <- 0
-data.table::fwrite(results, paste0("./output/results_spa_",year,"_",country,"_",product,".csv"))
 
 
-sum(results$rest)
-sum(results$fd)
-
-
-# Prepare index for sankeys ----------------------------------------
-
-index <- rbind(index,
-               data.frame(country = countries$Country[countries$ISO == colnames(Y_fabio)[1:192]],
-                          ISO = colnames(Y_fabio)[1:192],
-                          item = "",
-                          model = "fabio"),
-               data.frame(country = countries_exio$EXIOregion[45:49],
-                          ISO = countries_exio$EXIO2digit[45:49],
-                          item = "",
-                          model = "exio"))
-
-write.csv(index,"./input/index.csv")
