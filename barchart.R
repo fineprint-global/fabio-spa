@@ -1,10 +1,11 @@
 ##########################################################################
-##  Worldmaps
+##  Bar charts
 ##########################################################################
-# install.packages("wbstats")
+# require(devtools)
+# install_github("wilkox/treemapify")
+# install.packages("treemapify")
 library(ggplot2)
-library(sf)
-library(rnaturalearth)
+library(treemapify)
 library(tidyverse)
 library(Matrix)
 
@@ -12,53 +13,38 @@ mount_wu_share()
 fabiopath <- "/mnt/nfs_fineprint/tmp/fabio/"
 exiopath <- "/home/bruckner/wu_share/WU/Projekte/GRU/04_Daten/MRIO/IO data/EXIOBASE/EXIOBASE 3.6/parsed/pxp/"
 
-agg <- function(x){ x <- as.matrix(x) %*% sapply(unique(colnames(x)),"==",colnames(x)); return(x) }
+agg <- function(x) { x <- as.matrix(x) %*% sapply(unique(colnames(x)),"==",colnames(x)); return(x) }
 
-per_capita <- function(countries, data, year = as.integer(format(Sys.Date(), "%Y"))-1){
-  pop_data <- wbstats::wb(indicator = "SP.POP.TOTL", startdate = year, enddate = year)
-  if(is.null(countries)) {
-    data_pc <- data.frame(country = as.character(data$country), 
-                          value = as.numeric(data$value))
-  } else {
-    data_pc <- data.frame(country = as.character(countries), 
-                          value = as.numeric(data))
-  }
-  data_pc$pop <- pop_data$value[match(data_pc$country, pop_data$iso3c)]
-  data_pc$value <- data_pc$value / data_pc$pop
-  return(data_pc[,1:2])
-}
 #----------------------------------------
 # read data
 #----------------------------------------
-world <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf") %>% 
-  select(admin, adm0_a3_is, continent, region_un, subregion, region_wb, geometry) %>% 
-  group_by(admin, adm0_a3_is, continent, region_un, subregion, region_wb) %>% 
-  summarise()
-# theme_set(theme_bw())
-# world <- sf::st_as_sf(map('world', plot = FALSE, fill = TRUE))
-# world$footprint <- rnorm(nrow(world), 100, 60)
-# world <- map('world', projection = "gilbert")
-# world <- map('world', projection = "mollweide")
-
 items <- read.csv2("./input/Items.csv", stringsAsFactors = FALSE)
 items_exio <- read.csv2("./input/items_exio.csv", stringsAsFactors = FALSE)
 regions <- readODS::read_ods("./input/fabio-exiobase.ods", sheet = 3)
+regions_all <- read.csv2("./input/Regions.csv")
 regions_exio <- read.csv2("./input/Regions_FAO-EXIO.csv", stringsAsFactors = FALSE)
-regions_exio <- unique(regions_exio[,-(1:2)])
+regions_exio <- unique(regions_exio[,c(3,4,5)])
 regions_exio$EXIOcode <- as.integer(regions_exio$EXIOcode)
 regions_exio <- regions_exio[is.finite(regions_exio$EXIOcode),]
 regions_exio <- regions_exio[order(regions_exio$EXIOcode),]
+regions_exio$ISO <- as.character(regions$ISO[match(regions_exio$EXIOregion,regions$EXIOBASE)])
+regions_exio$ISO[45:49] <- "ROW"
 index_fabio <- data.frame(country = rep(regions$Country, each=130),
                           ISO = rep(regions$ISO, each=130),
                           item = rep(items$Item, 192),
+                          group = rep(items$Com.Group, 192),
                           model = "fabio")
 index_exio <- data.frame(country = rep(regions_exio$EXIOregion, each=200),
-                         ISO = rep(regions_exio$EXIO2digit, each=200),
+                         ISO = rep(regions_exio$ISO, each=200),
                          item = rep(items_exio$Item, 49),
+                         group = rep(items_exio$Group, 49),
                          model = "exio")
+index <- rbind(index_fabio, index_exio)
+index$continent <- regions_all$Continent[match(index$ISO,regions_all$ISO)]
+
 
 ######################################################
-# select year and allocation
+# select year
 #----------------------------------------
 year <- 2013
 ######################################################
@@ -121,18 +107,14 @@ product_list[15,] <- c("ALL", "Cotton lint", "(kg per capita)")
 ######################################################
 # select product and country (and define cutoff)
 #----------------------------------------
-select <- 15
-percapita <- F
-allocation <- c("mass", "value")[1]
+select <- 13
+percapita <- TRUE
 ######################################################
 country <- product_list$country[select]
 product <- product_list$product[select]
 unit <- product_list$unit[select]
 
 
-#----------------------------------------
-# calculate footprints
-#----------------------------------------
 if(product=="Wood") { 
   element_mass <- colSums(L_mass[index_fabio$ISO == country & index_fabio$item %in% items$Item[items$Com.Group=="Wood"], ]) / 1000
   element_value <- colSums(L_value[index_fabio$ISO == country & index_fabio$item %in% items$Item[items$Com.Group=="Wood"], ]) / 1000
@@ -144,40 +126,61 @@ if(product=="Wood") {
   element_value <- L_value[index_fabio$ISO == country & index_fabio$item == product, ]
 }
 
-if(allocation=="mass") {
-  data <- data.frame(country = colnames(Y),
-                     value = colSums(element_mass * Y))
-} else {
-  data <- data.frame(country = colnames(Y),
-                     value = colSums(element_value * Y))
-}
 
-if(percapita) {
-  world$footprint <- per_capita(data$country, data$value * 1000, year)$value[match(world$adm0_a3_is, data$country)]
-  p <- ggplot(data = world) +
-    geom_sf(aes(fill = footprint), size = 0.05) +
-    labs(fill=paste0(if_else(country=="ALL","",paste0(country," ")),product,"\n", unit), 
-         tag = if_else(allocation=="mass", "a)", "b)")) + 
-    scale_fill_viridis_c(direction = -1, na.value = "lightgrey", limits=c(0,70)) + 
-    theme(rect = element_blank()) + 
-    coord_sf(crs = "+proj=robin")  # "+proj=moll"   "+proj=wintri"
-} else {
-  # share of ROW which is lost (i.e. not plotted)
-  sum(data$value[192:197] / sum(data$value, na.rm = T), na.rm = T)
-  world$footprint <- data$value[match(world$adm0_a3_is, data$country)] / sum(data$value, na.rm = T)
-  p <- ggplot(data = world) +
-    geom_sf(aes(fill = footprint), size = 0.05) +
-    labs(fill=paste0(if_else(country=="ALL","",paste0(country,"")),product,"\n","(percentage)"), 
-         tag = if_else(allocation=="mass", "a)", "b)")) + 
-    scale_fill_viridis_c(direction = -1, na.value = "lightgrey", labels = scales::percent, limits=c(0,0.22)) + 
-    theme(rect = element_blank()) + 
-    coord_sf(crs = "+proj=robin")  # "+proj=moll"   "+proj=wintri"
-}
+###################################################
+# Bar plots
+###################################################
+
+data <- rbind(data.frame(region = index$ISO,
+                         product = index$item,
+                         continent = index$continent,
+                         group = index$group,
+                         allocation = "mass allocation",
+                         value = rowSums(element_mass * Y)),
+              data.frame(region = index$ISO,
+                         product = index$item,
+                         continent = index$continent,
+                         group = index$group,
+                         allocation = "value allocation",
+                         value = rowSums(element_value * Y)))
+
+data$group <- as.character(data$group)
+
+data <- data[data$value>0.5,]
+data$group2 <- items$Group[match(data$product, items$Item)]
+data$group2[data$group %in% items_exio$Group] <- "Non-food"
+data$group2[data$group2 %in% c("Livestock","Livestock products","Fish")] <- "Food" #"Food, animal-based"
+data$group2[data$group2 %in% c("Primary crops","Crop products")] <- "Food" #"Food, plant-based"
+data$group2 <- as.factor(data$group2)
+data$group[data$group %in% c("Hides, skins, wool", "Fibre crops", "Mining", "Agriculture & forestry")] <- "Others"
+data$group[data$group %in% c("Animal fats")] <- "Meat"
+data$group <- as.factor(data$group)
+
+
+data <- data %>% 
+  # select(-product, -continent) %>% 
+  group_by(group2,group,allocation) %>% 
+  summarize(value = sum(value))
+
+# data %>% 
+#   group_by(group) %>% 
+#   summarize(value = sum(value))
+
+# pplot <- ggplot(data, x=continent, y=data, aes(continent, data, fill = group))
+
+forcats::fct_reorder(data$group, data$value)
+
+p <- ggplot(data, aes(x = group2, y = value, fill = forcats::fct_reorder(group, value))) + 
+  geom_bar(stat = "identity") + 
+  theme_bw() +
+  theme(axis.title.x = element_blank()) + 
+  labs(y = "Seed cotton (tonnes)", fill = "Products") +
+  facet_grid(~ allocation) + 
+  viridis::scale_fill_viridis(discrete=T)
 
 p
 
-ggsave(filename = paste0("map_",country,"_",product,"_",if_else(percapita,"percapita_",""),allocation,".png"), 
-       plot = p, device = "png", path = "./output", scale = 1, width = 207, height = 90, units = "mm", dpi = 300)
+ggsave(filename = paste0("barchart_",country,"_",product,".png"), 
+       plot = p, device = "png", path = "./output", scale = 1, width = 150, height = 100, units = "mm", dpi = 300)
 
-# ggsave(filename = paste0("map_",country,"_",product,"_",if_else(percapita,"percapita_",""),allocation,".tif"), 
-#        plot = p, device = "tiff", path = "./output", scale = 1, width = 207, height = 90, units = "mm", dpi = 300)
+

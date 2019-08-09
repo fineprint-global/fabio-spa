@@ -13,37 +13,40 @@ mount_wu_share()
 fabiopath <- "/mnt/nfs_fineprint/tmp/fabio/"
 exiopath <- "/home/bruckner/wu_share/WU/Projekte/GRU/04_Daten/MRIO/IO data/EXIOBASE/EXIOBASE 3.6/parsed/pxp/"
 
-agg <- function(x)
-{
-  x <- as.matrix(x) %*% sapply(unique(colnames(x)),"==",colnames(x))
-  return(x)
-}
+agg <- function(x) { x <- as.matrix(x) %*% sapply(unique(colnames(x)),"==",colnames(x)); return(x) }
+
 #----------------------------------------
 # read data
 #----------------------------------------
 items <- read.csv2("./input/Items.csv", stringsAsFactors = FALSE)
 items_exio <- read.csv2("./input/items_exio.csv", stringsAsFactors = FALSE)
 regions <- readODS::read_ods("./input/fabio-exiobase.ods", sheet = 3)
+regions_all <- read.csv2("./input/Regions.csv")
 regions_exio <- read.csv2("./input/Regions_FAO-EXIO.csv", stringsAsFactors = FALSE)
-regions_exio <- unique(regions_exio[,-(1:2)])
+regions_exio <- unique(regions_exio[,c(3,4,5)])
 regions_exio$EXIOcode <- as.integer(regions_exio$EXIOcode)
 regions_exio <- regions_exio[is.finite(regions_exio$EXIOcode),]
 regions_exio <- regions_exio[order(regions_exio$EXIOcode),]
+regions_exio$ISO <- as.character(regions$ISO[match(regions_exio$EXIOregion,regions$EXIOBASE)])
+regions_exio$ISO[45:49] <- "ROW"
 index_fabio <- data.frame(country = rep(regions$Country, each=130),
                           ISO = rep(regions$ISO, each=130),
                           item = rep(items$Item, 192),
+                          group = rep(items$Com.Group, 192),
                           model = "fabio")
 index_exio <- data.frame(country = rep(regions_exio$EXIOregion, each=200),
-                         ISO = rep(regions_exio$EXIO2digit, each=200),
+                         ISO = rep(regions_exio$ISO, each=200),
                          item = rep(items_exio$Item, 49),
+                         group = rep(items_exio$Group, 49),
                          model = "exio")
 index <- rbind(index_fabio, index_exio)
+index$continent <- regions_all$Continent[match(index$ISO,regions_all$ISO)]
 
 ######################################################
 # select year and allocation
 #----------------------------------------
 year <- 2013
-allocation <- c("mass","price")[1]
+allocation <- c("mass","price")[2]
 ######################################################
 
 #----------------------------------------
@@ -75,17 +78,47 @@ rm(L_fabio, L_link); gc()
 
 
 ######################################################
-# select country & product 
+# define country-product combinations 
 #----------------------------------------
-country <- c("BRA", "IDN")[1]
-product <- c("Cattle", "Soyabeans", "Oil, palm fruit", "Wood")[1]
-######################################################
+product_list <- data.frame(country = character(), product = character(), unit = character(), stringsAsFactors = F)
+product_list[1,] <- c("BRA", "Cattle", "(heads per capita)")
+product_list[2,] <- c("BRA", "Soyabeans", "(kg per capita)")
+product_list[3,] <- c("IDN", "Oil, palm fruit", "(kg per capita)")
+product_list[4,] <- c("IDN", "Wood", "(cubic metres per capita)")
+product_list[4,] <- c("IDN", "Wood fuel", "(cubic metres per capita)")
+product_list[5,] <- c("IDN", "Industrial roundwood, coniferous", "(cubic metres per capita)")
+product_list[6,] <- c("IDN", "Industrial roundwood, non-coniferous", "(cubic metres per capita)")
+product_list[7,] <- c("IND", "Seed cotton", "(kg per capita)")
+product_list[8,] <- c("CHN", "Seed cotton", "(kg per capita)")
+product_list[9,] <- c("USA", "Seed cotton", "(kg per capita)")
+product_list[10,] <- c("PAK", "Seed cotton", "(kg per capita)")
+product_list[11,] <- c("BRA", "Seed cotton", "(kg per capita)")
+product_list[12,] <- c("UZB", "Seed cotton", "(kg per capita)")
+product_list[13,] <- c("ALL", "Seed cotton", "(kg per capita)")
+product_list[14,] <- c("ALL", "Cottonseed", "(kg per capita)")
+product_list[15,] <- c("ALL", "Cotton lint", "(kg per capita)")
 
+
+######################################################
+# select product and country (and define cutoff)
 #----------------------------------------
-# calculate footprints
-#----------------------------------------
-if(product=="Wood") element <- colSums(L[index_fabio$ISO == country & index_fabio$item %in% items$Item[items$Com.Group=="Wood"], ]) / 1000
-if(product!="Wood") element <- L[index_fabio$ISO == country & index_fabio$item == product, ]
+select <- 13
+percapita <- TRUE
+######################################################
+country <- product_list$country[select]
+product <- product_list$product[select]
+unit <- product_list$unit[select]
+
+
+if(product=="Wood") { 
+  element <- colSums(L[index_fabio$ISO == country & index_fabio$item %in% items$Item[items$Com.Group=="Wood"], ]) / 1000
+} else if(country=="ALL") {
+  element <- colSums(L[index_fabio$item == product, ])
+} else {
+  element <- L[index_fabio$ISO == country & index_fabio$item == product, ]
+}
+
+
 
 data <- data.frame(region = index$ISO,
                    product = index$item,
@@ -114,11 +147,12 @@ p <- ggplot(data, aes(area = data, fill = group, label = product, subgroup = gro
   scale_fill_brewer(palette = "Set2") +
   theme(legend.position = "none")
 
-# p
+p
 
 ggsave(filename = paste0("treemap_",country,"_",product,"_",allocation,".png"), 
        plot = p, device = "png", path = "./output", scale = 1, width = 200, height = 150, units = "mm", dpi = 300)
 
 # ggsave(filename = paste0("treemap_",country,"_",product,"_",allocation,".tif"), 
 #        plot = p, device = "tiff", path = "./output", scale = 1, width = 200, height = 150, units = "mm", dpi = 300)
+
 
