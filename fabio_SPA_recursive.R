@@ -7,6 +7,7 @@ fabiopath <- "/mnt/nfs_fineprint/tmp/fabio/"
 exiopath <- "/home/bruckner/wu_share/WU/Projekte/GRU/04_Daten/MRIO/IO data/EXIOBASE/EXIOBASE 3.6/parsed/pxp/"
 
 library(Matrix)
+source("recursive_fun.R")
 
 countries <- readODS::read_ods("./input/fabio-exiobase.ods", sheet = 3)
 # countries_exio <- read.csv2("./input/Regions_FAO-EXIO.csv", stringsAsFactors = FALSE)
@@ -28,61 +29,6 @@ get_L2 <- function(fname, aL0, aL1, A, L1, cutoff){
   temp <- (extension * A)[,aL1] * A[aL1,aL0] * Y[aL0,country]
   temp <- data.frame(country = unique(class.col$Country)[country], L0 = aL0, L1 = aL1, L2 = 1:length(temp), L3 = 0, value = temp)
   try(fwrite(temp[abs(temp$value) > cutoff, ], file = fname, row.names = FALSE, col.names = FALSE, append = TRUE))
-}
-
-
-# --- Recursive approach, functions ---
-
-# Recursively split alpha (x[p]), given a split defined by D[p, ].
-# Calculate for values >= epsilon and go through lvl_cap layers.
-get_path <- function(alpha, D, p, epsilon, lvl_cap = 3, lvl = 0) {
-  
-  if(p > nrow(D)) {return(list(lvl = lvl, split = c("final" = alpha)))}
-  
-  tmp <- alpha * D[p, ]
-  
-  out <- tmp[tmp >= epsilon]
-  rest <- sum(tmp[tmp < epsilon])
-  
-  if(lvl >= lvl_cap) {return(list(lvl = lvl, split = c(out, "rest" = rest)))}
-  
-  lvl <- lvl + 1
-  
-  return(
-    list(
-      lvl = lvl - 1,
-      split = c(out, "rest" = rest),
-      down = lapply(structure(names(out), names = names(out)), 
-                    function(x, D, out, epsilon, lvl_cap, lvl) {
-                      get_path(out[[x]], D = D,
-                               p = as.integer(substr(x, 4, nchar(x))), 
-                               epsilon = epsilon, lvl_cap = lvl_cap, lvl = lvl)
-                    }, D, out, epsilon, lvl_cap, lvl))
-  )
-}
-
-# Transform a tree-list into a data.table with level, id-path and value
-library(data.table)
-df_ify <- function(x, prev = "") {
-  
-  if(is.null(x$down)) {
-    data.table("lvl" = x[[1]], 
-               id = paste0(prev, names(x[[2]])),
-               val = x[[2]])
-  } else {
-    rbindlist(
-      list(
-        data.table("lvl" = x[[1]],
-                   id = paste0(prev, names(x[[2]])),
-                   val = x[[2]]),
-        rbindlist(
-          lapply(names(x[["down"]]), function(name, x, prev) {
-            df_ify(x[["down"]][[name]], prev = paste0(name, " > ", prev))
-          }, x, prev)
-        )
-      )
-    )
-  }
 }
 
 
@@ -126,7 +72,7 @@ C <- Y/x
 C[! is.finite(C)] <- 0
 
 D <- cbind(B,C)
-rm(B); gc()
+rm(B,C,Z,Y); gc()
 
 
 #----------------------------------------
@@ -141,22 +87,29 @@ product <- "Wood fuel"
 product <- "Industrial roundwood, coniferous"
 product <- "Industrial roundwood, non-coniferous"
 cutoff <- 0.001
+lvl_cap <- 5
 #----------------------------------------
 
 p <- which(index$country==country & index$item==product)
 
-colnames(D) <- paste0("col", 1:ncol(D))
-rownames(D) <- NULL
+# colnames(D) <- paste0("c", 1:ncol(D))
+# rownames(D) <- NULL
 alpha <- x[[p]]
 
 # --- Recursive approach ---
 
 # Recursively split alpha (x[p]), given a split defined by D[p, ].
 # Calculate for values >= epsilon and go through lvl_cap layers.
-tree <- get_path(alpha, D, p, epsilon = cutoff * alpha, lvl_cap = 5)
+tree <- get_path(alpha, D, p, epsilon = cutoff * alpha, lvl_cap, parallel = NULL)
 
 # Transform a tree-list into a data.table with level, id-path and value
 df <- df_ify(tree)
+
+# --- Recursive approach, in parallel ---
+
+# We use up to 30 / 120 GB on one core
+tree_p <- get_path(alpha, D, p, epsilon = cutoff * alpha, lvl_cap, parallel = 3L)
+df_p <- df_ify(tree_p)
 
 # Transform df to include levels in separate columns
 split <- strsplit(df$id, " > ")
